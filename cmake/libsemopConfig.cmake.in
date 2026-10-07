@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(nlohmann_json 3.11)
+if(@LIBSEMOP_WITH_TYPESAFE@)
+  find_dependency(libtypesafe 0.1)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/libsemopTargets.cmake")
+check_required_components(libsemop)
