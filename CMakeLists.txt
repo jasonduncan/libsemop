@@ -33,7 +33,7 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 if(LIBSEMOP_WITH_TYPESAFE)
-  find_package(libtypesafe 0.1 QUIET)
+  find_package(libtypesafe 0.2 QUIET)
   if(NOT libtypesafe_FOUND)
     if(NOT LIBSEMOP_FETCH_DEPS)
       message(FATAL_ERROR "libtypesafe not found; install it, set LIBSEMOP_FETCH_DEPS=ON, or LIBSEMOP_WITH_TYPESAFE=OFF")
@@ -41,9 +41,9 @@ if(LIBSEMOP_WITH_TYPESAFE)
     # Develop against a local checkout with -DFETCHCONTENT_SOURCE_DIR_LIBTYPESAFE=<path>.
     set(LIBTYPESAFE_INSTALL ${LIBSEMOP_INSTALL} CACHE BOOL "" FORCE)
     FetchContent_Declare(libtypesafe
-      # v0.2.0: image assets, Box answers (cut from libtypesafe PR #2's branch).
-      URL https://github.com/jasonduncan/libtypesafe/archive/refs/tags/v0.2.0.tar.gz
-      URL_HASH SHA256=d54efcc74273971513096de5d270dbce50803929ac17e406f8d63bec43686d85
+      # v0.2.1: image assets, Box answers; reports version 0.2.1.
+      URL https://github.com/jasonduncan/libtypesafe/archive/refs/tags/v0.2.1.tar.gz
+      URL_HASH SHA256=7d21754676687538a08b79e0c6b508b3ee6f08efc666ea6dc41dc2effcee85ff
       DOWNLOAD_EXTRACT_TIMESTAMP ON)
     FetchContent_MakeAvailable(libtypesafe)
   endif()
