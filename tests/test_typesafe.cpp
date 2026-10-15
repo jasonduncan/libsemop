@@ -1,5 +1,6 @@
 // The TypeSafe provider over a real libtypesafe::Client with a scripted transport. Offline.
 #include <deque>
+#include <map>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -212,12 +213,30 @@ TEST_CASE("images go in assets with the images header; Box answers are decoded")
 
   const auto& request = f.transport->sent.at(0).request;
   CHECK(request.headers.get("TypeSafe-Danger-Zone-Images") == "true");
-  const Json body = Json::parse(request.body);
-  CHECK(body["questions"]["mug"] == Json{{"type", "box"}, {"instructions", "the coffee mug in `photo`"}});
-  CHECK(body["assets"].size() == 2);  // only what's referenced
-  CHECK(body["assets"][photo.placeholder()] ==
-        Json{{"type", "image"}, {"format", "png"}, {"data_base64", photo.base64()}});
-  CHECK(body["assets"][logo.placeholder()]["data_base64"] == logo.base64());
+  const std::string type(*request.headers.get("Content-Type"));
+  REQUIRE(type.rfind("multipart/form-data; boundary=", 0) == 0);
+  const std::string boundary = "--" + type.substr(type.find('=') + 1);
+  // Parts by name: the JSON request, then the two images (the unattached-but-unused one isn't sent).
+  std::map<std::string, std::string> parts;
+  for (std::size_t at = request.body.find(boundary); request.body.compare(at + boundary.size(), 2, "--") != 0;) {
+    const std::size_t next = request.body.find(boundary, at + 1);
+    const std::string part = request.body.substr(at + boundary.size() + 2, next - at - boundary.size() - 4);
+    const std::size_t n = part.find("name=\"") + 6;
+    parts[part.substr(n, part.find('"', n) - n)] = part.substr(part.find("\r\n\r\n") + 4);
+    at = next;
+  }
+  REQUIRE(parts.size() == 3);
+  // Byte-identical to the Python provider's request part (typesafe-sdk 0.7.5) for the same call.
+  std::string expected =
+      R"({"state":{"photo":"P"},"model":"jev-1.14.0","questions":{"mug":{"type":"box","instructions":"the coffee mug in `photo`"},"brand":{"type":"choice","instructions":"Which brand?","criteria":{"a":"this logo: L","b":"other"}}},"assets":{"P":{"type":"image","part":"asset-0"},"L":{"type":"image","part":"asset-1"}}})";
+  for (const auto& [from, to] : {std::pair{std::string("\"P\""), "\"" + photo.placeholder() + "\""},
+                                 std::pair{std::string(": L\""), ": " + logo.placeholder() + "\""},
+                                 std::pair{std::string("\"L\""), "\"" + logo.placeholder() + "\""}}) {
+    for (std::size_t at; (at = expected.find(from)) != std::string::npos;) expected.replace(at, from.size(), to);
+  }
+  CHECK(parts["request"] == expected);
+  CHECK(parts["asset-0"] == std::string(photo.bytes().begin(), photo.bytes().end()));
+  CHECK(parts["asset-1"] == std::string(logo.bytes().begin(), logo.bytes().end()));
 }
 
 TEST_CASE("text-only calls are unchanged") {

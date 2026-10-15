@@ -57,6 +57,10 @@ class Image {
   [[nodiscard]] int height() const noexcept { return data_->height; }
   [[nodiscard]] const std::vector<std::uint8_t>& bytes() const noexcept { return data_->bytes; }
   [[nodiscard]] std::size_t size() const noexcept { return data_->bytes.size(); }
+  /// The bytes, shared with this image (no copy), e.g. for a multipart upload.
+  [[nodiscard]] std::shared_ptr<const std::vector<std::uint8_t>> shared_bytes() const noexcept {
+    return {data_, &data_->bytes};
+  }
   /// Standard, padded base64, as TypeSafe's `data_base64` asset field wants it.
   [[nodiscard]] std::string base64() const;
 

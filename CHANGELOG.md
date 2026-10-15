@@ -9,9 +9,11 @@
 - `semop::Box` question and `Region` answer value (`top`/`bottom`/`left`/`right` fractions plus
   confidence), `make_box_answer`, `Answer::region()`. Box needs `jev-1.14.0`.
 - `semop::locate`: a presence Boolean plus a Box in one call (Box has no "not found").
-- `TypeSafe::attach` / `detach`: referenced images are sent as base64 `assets`, with
+- `TypeSafe::attach` / `detach`: referenced images are sent as multipart `assets` through
+  libtypesafe (request JSON byte-identical to the Python provider's), with
   `TypeSafe-Danger-Zone-Images: true` on every image or Box request; the 32 MiB per-request
-  limit (counting each use) is checked before sending.
+  limit (counting each use) is checked before sending. Box answers use libtypesafe's typed
+  `BoxAnswer`. Needs libtypesafe with image support (unreleased).
 - `wire::encode` reports Box answers as `"type": "box"` with the region as the value.
 - `examples/image.cpp`.
 

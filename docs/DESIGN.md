@@ -40,12 +40,11 @@ verified, and how, is in §6.
   (`image-<uuid>`) in the state or question text, rather than carried in `Provider::start`'s
   signature. The core `Provider` API is unchanged; the Python library finds `Image` objects in
   the state (and live placeholders in text) instead.
-- Image requests are **not** byte-identical to the Python provider's: Python sends multipart
-  file parts through typesafe-sdk 0.7.5; libsemop sends base64 `data_base64` assets because
-  libtypesafe 0.1 only sends JSON. Same server meaning, ~33% larger bodies. Multipart needs a
-  libtypesafe change.
-- libtypesafe 0.1 parses `box` answers as `UnknownAnswer`; `src/typesafe.cpp` reads the raw
-  JSON. A `BoxAnswer` in libtypesafe would remove that.
+- Images go through libtypesafe's `CallOptions::assets` (multipart, as typesafe-sdk 0.7.5
+  sends them), in order of first use, so the request JSON is byte-identical to the Python
+  provider's (checked in `test_typesafe.cpp` against the string `tests/test_images.py` checks).
+  Box answers are libtypesafe's typed `BoxAnswer`. This needs libtypesafe's unreleased image
+  support; the FetchContent URL still points at v0.1.0 until it's tagged.
 - Box answers have no probabilities: `make_box_answer` takes the region and an optional
   confidence (none reported → 0). `bench::decide` returns no decision for Box.
 

@@ -92,8 +92,9 @@ answers->at("mug").confidence;    // the model's confidence in the box
 - **Several frames** go in the state as an array, oldest first:
   `{"frames", semop::frames({f0, f1, f2}, {4, 2, 0}).value()}`, then ask "Did the door open
   during `frames`?" or point at `` `frames[2].frame` ``.
-- Images are sent as base64 JSON assets: libtypesafe 0.1 sends JSON bodies only, so the
-  multipart form TypeSafe recommends (about 33% smaller) isn't used yet.
+- Images are sent as multipart file parts (libtypesafe's `CallOptions::assets`); the request
+  JSON is byte-identical to the Python provider's. Needs libtypesafe with image support
+  (its `feat/image-support`, unreleased; build with `-DFETCHCONTENT_SOURCE_DIR_LIBTYPESAFE=<path>`).
 
 See `examples/image.cpp`.
 
