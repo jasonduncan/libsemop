@@ -43,8 +43,8 @@ verified, and how, is in §6.
 - Images go through libtypesafe's `CallOptions::assets` (multipart, as typesafe-sdk 0.7.5
   sends them), in order of first use, so the request JSON is byte-identical to the Python
   provider's (checked in `test_typesafe.cpp` against the string `tests/test_images.py` checks).
-  Box answers are libtypesafe's typed `BoxAnswer`. This needs libtypesafe's unreleased image
-  support; the FetchContent URL still points at v0.1.0 until it's tagged.
+  Box answers are libtypesafe's typed `BoxAnswer`. This needs libtypesafe v0.2.0, which
+  FetchContent downloads (pinned by SHA-256).
 - Box answers have no probabilities: `make_box_answer` takes the region and an optional
   confidence (none reported → 0). `bench::decide` returns no decision for Box.
 

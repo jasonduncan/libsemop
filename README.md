@@ -93,8 +93,8 @@ answers->at("mug").confidence;    // the model's confidence in the box
   `{"frames", semop::frames({f0, f1, f2}, {4, 2, 0}).value()}`, then ask "Did the door open
   during `frames`?" or point at `` `frames[2].frame` ``.
 - Images are sent as multipart file parts (libtypesafe's `CallOptions::assets`); the request
-  JSON is byte-identical to the Python provider's. Needs libtypesafe with image support
-  (its `feat/image-support`, unreleased; build with `-DFETCHCONTENT_SOURCE_DIR_LIBTYPESAFE=<path>`).
+  JSON is byte-identical to the Python provider's. Needs libtypesafe v0.2.0
+  (fetched automatically).
 
 See `examples/image.cpp`.
 

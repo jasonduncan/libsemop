@@ -41,7 +41,9 @@ if(LIBSEMOP_WITH_TYPESAFE)
     # Develop against a local checkout with -DFETCHCONTENT_SOURCE_DIR_LIBTYPESAFE=<path>.
     set(LIBTYPESAFE_INSTALL ${LIBSEMOP_INSTALL} CACHE BOOL "" FORCE)
     FetchContent_Declare(libtypesafe
-      URL https://github.com/jasonduncan/libtypesafe/archive/refs/tags/v0.1.0.tar.gz
+      # v0.2.0: image assets, Box answers (cut from libtypesafe PR #2's branch).
+      URL https://github.com/jasonduncan/libtypesafe/archive/refs/tags/v0.2.0.tar.gz
+      URL_HASH SHA256=d54efcc74273971513096de5d270dbce50803929ac17e406f8d63bec43686d85
       DOWNLOAD_EXTRACT_TIMESTAMP ON)
     FetchContent_MakeAvailable(libtypesafe)
   endif()
