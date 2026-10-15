@@ -13,7 +13,7 @@
   libtypesafe (request JSON byte-identical to the Python provider's), with
   `TypeSafe-Danger-Zone-Images: true` on every image or Box request; the 32 MiB per-request
   limit (counting each use) is checked before sending. Box answers use libtypesafe's typed
-  `BoxAnswer`. Needs libtypesafe v0.2.0, which the build now fetches.
+  `BoxAnswer`. Needs libtypesafe v0.2.1, which the build now fetches.
 - `wire::encode` reports Box answers as `"type": "box"` with the region as the value.
 - `examples/image.cpp`.
 

@@ -93,7 +93,7 @@ answers->at("mug").confidence;    // the model's confidence in the box
   `{"frames", semop::frames({f0, f1, f2}, {4, 2, 0}).value()}`, then ask "Did the door open
   during `frames`?" or point at `` `frames[2].frame` ``.
 - Images are sent as multipart file parts (libtypesafe's `CallOptions::assets`); the request
-  JSON is byte-identical to the Python provider's. Needs libtypesafe v0.2.0
+  JSON is byte-identical to the Python provider's. Needs libtypesafe v0.2.1
   (fetched automatically).
 
 See `examples/image.cpp`.
@@ -101,7 +101,7 @@ See `examples/image.cpp`.
 ## Build and use
 
 ```sh
-cmake -S . -B build && cmake --build build     # fetches nlohmann_json and libtypesafe 0.2.0 if needed
+cmake -S . -B build && cmake --build build     # fetches nlohmann_json and libtypesafe 0.2.1 if needed
 ctest --test-dir build -LE live                 # offline tests and package checks
 TYPESAFE_API_KEY=... LIBSEMOP_LIVE=1 ctest --test-dir build -L live
 ```
