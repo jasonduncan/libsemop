@@ -16,7 +16,7 @@ verified, and how, is in §6.
 | 1 | Port `semantic-operators-lib` 0.11.0, not the legacy `semantic-operators` 1.0.0 | You said the lib is current and the 1.0.0 repo is legacy | — |
 | 2 | Project `libsemop`, namespace `semop`, headers `<semop/...>`, CMake targets `libsemop::semop` (core) and `libsemop::typesafe` | Matches the libtypesafe naming; `semop` is your own name, so a short namespace is safe | Namespace `libsemop` for symmetry with libtypesafe |
 | 3 | A separate repo at `~/Development/Projects/libsemop`, next to libtypesafe. **Resolved 2026-10-07:** Jason created the private repo `jasonduncan/libsemop` | Pushing to a new public repo is yours to decide | — |
-| 4 | The core depends only on nlohmann_json; the TypeSafe provider is a separate target that needs libtypesafe ≥ 0.1 (`find_package`, else the v0.1.0 GitHub release is fetched) | Mirrors Python: the core has no provider dependencies, and each provider is optional | One library that always links libtypesafe |
+| 4 | The core depends only on nlohmann_json; the TypeSafe provider is a separate target that needs libtypesafe ≥ 0.2 (`find_package`, else the v0.2.0 GitHub release is fetched) | Mirrors Python: the core has no provider dependencies, and each provider is optional | One library that always links libtypesafe |
 | 5 | Same conventions as libtypesafe: C++17, never throws, `Result<T>` / `Error`, built without exceptions or RTTI | Same users, same hosts | Exceptions, mirroring Python's `ProviderError` |
 | 6 | Providers are non-blocking: `start()` / `pump()` / `cancel()`, with blocking helpers (`ask`, `apply`, `filter_items`, `rerank`, flows, bench) on top | Works from a game or UI loop like libtypesafe, and gives concurrency without threads | Blocking-only providers with a thread pool for concurrency |
 | 7 | Questions are plain structs validated when used (every entry point returns `invalid_question`), plus `semop::check()` for eager validation | Without exceptions, constructors can't fail; plain structs keep designated initializers | Factory functions returning `Result<Question>` |
@@ -122,7 +122,7 @@ the exception propagates.
 
 - **Targets:** `libsemop::semop` (core; nlohmann_json only) and `libsemop::typesafe`
   (`LIBSEMOP_WITH_TYPESAFE`, on by default).
-- **libtypesafe** comes from `find_package(libtypesafe 0.1)`, or else the v0.1.0 release is
+- **libtypesafe** comes from `find_package(libtypesafe 0.2)`, or else the v0.2.0 release is
   fetched from GitHub. To develop against a local checkout, pass
   `-DFETCHCONTENT_SOURCE_DIR_LIBTYPESAFE=<path>`.
 - **Static library:** built without exceptions or RTTI, like libtypesafe (`provider.cpp`

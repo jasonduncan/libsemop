@@ -33,7 +33,7 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 if(LIBSEMOP_WITH_TYPESAFE)
-  find_package(libtypesafe 0.1 QUIET)
+  find_package(libtypesafe 0.2 QUIET)
   if(NOT libtypesafe_FOUND)
     if(NOT LIBSEMOP_FETCH_DEPS)
       message(FATAL_ERROR "libtypesafe not found; install it, set LIBSEMOP_FETCH_DEPS=ON, or LIBSEMOP_WITH_TYPESAFE=OFF")

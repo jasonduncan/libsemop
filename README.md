@@ -101,7 +101,7 @@ See `examples/image.cpp`.
 ## Build and use
 
 ```sh
-cmake -S . -B build && cmake --build build     # fetches nlohmann_json and libtypesafe 0.1.0 if needed
+cmake -S . -B build && cmake --build build     # fetches nlohmann_json and libtypesafe 0.2.0 if needed
 ctest --test-dir build -LE live                 # offline tests and package checks
 TYPESAFE_API_KEY=... LIBSEMOP_LIVE=1 ctest --test-dir build -L live
 ```
@@ -111,7 +111,7 @@ find_package(libsemop 0.1 REQUIRED)              # or add_subdirectory(libsemop)
 target_link_libraries(app PRIVATE libsemop::typesafe)   # or libsemop::semop for the core alone
 ```
 
-Requires CMake ≥ 3.24, a C++17 compiler, and, for the TypeSafe provider, libtypesafe ≥ 0.1 and
+Requires CMake ≥ 3.24, a C++17 compiler, and, for the TypeSafe provider, libtypesafe ≥ 0.2 and
 libcurl.
 
 ## License
