@@ -9,6 +9,7 @@
 #include "semop/bench.hpp"
 #include "semop/filtering.hpp"
 #include "semop/flows.hpp"
+#include "semop/images.hpp"
 #include "semop/provider.hpp"
 #include "semop/questions.hpp"
 #include "semop/rerank.hpp"

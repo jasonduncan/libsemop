@@ -1,5 +1,6 @@
 // The TypeSafe provider over a real libtypesafe::Client with a scripted transport. Offline.
 #include <deque>
+#include <map>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -176,4 +177,95 @@ TEST_CASE("cancel and destruction cancel the HTTP call") {
   }  // destroyed with a call in flight
   f.client.pump();
   CHECK(f.transport->sent[1].cancelled);
+}
+
+// ---------------------------------------------------------------------------
+// Images and Box
+// ---------------------------------------------------------------------------
+
+#include "imagekit.hpp"
+
+TEST_CASE("images go in assets with the images header; Box answers are decoded") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  auto photo = Image::from_bytes(imagekit::png()).value();
+  auto logo = Image::from_bytes(imagekit::png(300, 300)).value();
+  provider.attach(photo);
+  provider.attach(logo);
+  auto unused = Image::from_bytes(imagekit::png()).value();
+  provider.attach(unused);
+
+  f.transport->script.push_back(ok(Json::parse(R"({
+    "model": "jev-1.14.0",
+    "answers": {
+      "mug": {"type": "box", "box": {"top": 0.25, "bottom": 0.82, "left": 0.44, "right": 0.84}, "confidence": 0.92},
+      "brand": {"type": "choice", "choice": "a", "confidence": 0.8, "probabilities": {"a": 0.8, "b": 0.2}}
+    },
+    "usage": {"input_tokens": 500, "output_tokens": 30}
+  })")));
+  auto answers = ask(provider, Json{{"photo", photo.placeholder()}},
+                     Questions{{"mug", Box{"the coffee mug in `photo`"}},
+                               {"brand", Choice{"Which brand?", {{"a", "this logo: " + logo.placeholder()}, {"b", "other"}}}}});
+  REQUIRE(answers);
+  CHECK(answers->at("mug").region() == Region{0.25, 0.82, 0.44, 0.84});
+  CHECK(answers->at("mug").confidence == 0.92);
+  CHECK(answers->value(Operator{"mug", Box{"x"}}) == Region{0.25, 0.82, 0.44, 0.84});
+
+  const auto& request = f.transport->sent.at(0).request;
+  CHECK(request.headers.get("TypeSafe-Danger-Zone-Images") == "true");
+  const std::string type(*request.headers.get("Content-Type"));
+  REQUIRE(type.rfind("multipart/form-data; boundary=", 0) == 0);
+  const std::string boundary = "--" + type.substr(type.find('=') + 1);
+  // Parts by name: the JSON request, then the two images (the unattached-but-unused one isn't sent).
+  std::map<std::string, std::string> parts;
+  for (std::size_t at = request.body.find(boundary); request.body.compare(at + boundary.size(), 2, "--") != 0;) {
+    const std::size_t next = request.body.find(boundary, at + 1);
+    const std::string part = request.body.substr(at + boundary.size() + 2, next - at - boundary.size() - 4);
+    const std::size_t n = part.find("name=\"") + 6;
+    parts[part.substr(n, part.find('"', n) - n)] = part.substr(part.find("\r\n\r\n") + 4);
+    at = next;
+  }
+  REQUIRE(parts.size() == 3);
+  // Byte-identical to the Python provider's request part (typesafe-sdk 0.7.5) for the same call.
+  std::string expected =
+      R"({"state":{"photo":"P"},"model":"jev-1.14.0","questions":{"mug":{"type":"box","instructions":"the coffee mug in `photo`"},"brand":{"type":"choice","instructions":"Which brand?","criteria":{"a":"this logo: L","b":"other"}}},"assets":{"P":{"type":"image","part":"asset-0"},"L":{"type":"image","part":"asset-1"}}})";
+  for (const auto& [from, to] : {std::pair{std::string("\"P\""), "\"" + photo.placeholder() + "\""},
+                                 std::pair{std::string(": L\""), ": " + logo.placeholder() + "\""},
+                                 std::pair{std::string("\"L\""), "\"" + logo.placeholder() + "\""}}) {
+    for (std::size_t at; (at = expected.find(from)) != std::string::npos;) expected.replace(at, from.size(), to);
+  }
+  CHECK(parts["request"] == expected);
+  CHECK(parts["asset-0"] == std::string(photo.bytes().begin(), photo.bytes().end()));
+  CHECK(parts["asset-1"] == std::string(logo.bytes().begin(), logo.bytes().end()));
+}
+
+TEST_CASE("text-only calls are unchanged") {
+  Fixture f;
+  TypeSafe provider(f.client);
+  f.transport->script.push_back(ok(good_body));
+  REQUIRE(apply(provider, "hello", {complaint, department, urgency}));
+  const auto& request = f.transport->sent.at(0).request;
+  CHECK_FALSE(request.headers.contains("TypeSafe-Danger-Zone-Images"));
+  CHECK_FALSE(Json::parse(request.body).contains("assets"));
+}
+
+TEST_CASE("an unattached placeholder fails before sending") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  auto photo = Image::from_bytes(imagekit::png()).value();
+  auto answers = ask(provider, Json{{"photo", photo.placeholder()}}, Questions{{"q", Boolean{"Is it red?"}}});
+  REQUIRE_FALSE(answers);
+  CHECK(answers.error().kind == ErrorKind::invalid_argument);
+  CHECK_THAT(answers.error().message, ContainsSubstring("attach"));
+  CHECK(f.transport->sent.empty());
+}
+
+TEST_CASE("a malformed box answer is a provider error") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  f.transport->script.push_back(ok(Json::parse(R"({"model": "jev-1.14.0",
+    "answers": {"mug": {"type": "box", "box": {"top": 0.9, "bottom": 0.1, "left": 0, "right": 1}, "confidence": 0.9}}})")));
+  auto answers = ask(provider, "x", Questions{{"mug", Box{"the mug"}}});
+  REQUIRE_FALSE(answers);
+  CHECK(answers.error().kind == ErrorKind::provider_error);
 }

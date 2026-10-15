@@ -24,8 +24,8 @@ std::optional<std::string> key_for(const Question& question, const Decision& lab
     if (const bool* b = label.boolean()) return std::string(*b ? "true" : "false");
   } else if (std::holds_alternative<Choice>(question)) {
     if (const std::string* option = label.option()) return *option;
-  } else {
-    const auto& levels = std::get<Score>(question).levels;
+  } else if (const auto* score = std::get_if<Score>(&question)) {
+    const auto& levels = score->levels;
     if (const std::int64_t* level = label.level()) {
       if (*level >= 0 && std::size_t(*level) < levels.size()) return levels[std::size_t(*level)];
     }
@@ -39,6 +39,7 @@ Decision decide(const Question& question, const Answer& answer) {
   if (!answer.decided()) return {};
   if (std::holds_alternative<Boolean>(question)) return *answer.boolean();
   if (std::holds_alternative<Choice>(question)) return *answer.choice();
+  if (std::holds_alternative<Box>(question)) return {};  // no discrete decision: not benchmarked yet
   return std::int64_t(*answer.score() + 0.5);
 }
 

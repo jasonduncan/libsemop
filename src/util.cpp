@@ -27,6 +27,10 @@ std::string repr(const AnswerValue& value) {
   if (const auto* b = std::get_if<bool>(&value)) return *b ? "True" : "False";
   if (const auto* s = std::get_if<std::string>(&value)) return "'" + *s + "'";
   if (const auto* d = std::get_if<double>(&value)) return repr(*d);
+  if (const auto* r = std::get_if<Region>(&value)) {
+    return "Region(top=" + repr(r->top) + ", bottom=" + repr(r->bottom) + ", left=" + repr(r->left) +
+           ", right=" + repr(r->right) + ")";
+  }
   return "None";
 }
 

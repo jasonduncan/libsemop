@@ -13,7 +13,8 @@ add_executable(libsemop_tests
   test_flows.cpp
   test_filter_rerank.cpp
   test_bench.cpp
-  test_wire.cpp)
+  test_wire.cpp
+  test_images.cpp)
 target_link_libraries(libsemop_tests PRIVATE libsemop::semop Catch2::Catch2WithMain)
 target_include_directories(libsemop_tests PRIVATE ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})
 include(Catch)

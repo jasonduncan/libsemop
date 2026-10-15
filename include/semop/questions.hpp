@@ -68,7 +68,47 @@ struct Score {
   }
 };
 
-using Question = std::variant<Boolean, Choice, Score>;
+/// Locate one thing in an image; the answer's value is a `Region`. Needs an image in the
+/// request and a model that supports it (TypeSafe: `jev-1.14.0` / `jev-preview` only). There is
+/// no "not found" answer (the model always returns a box), so pair it with a presence Boolean,
+/// or use `semop::locate`, which does. One box per question.
+struct Box {
+  std::string instructions;
+  double min_confidence = 0;
+
+  [[nodiscard]] Box with_min_confidence(double c) const {
+    Box q = *this;
+    q.min_confidence = c;
+    return q;
+  }
+};
+
+/// A box's edges as fractions (0 to 1) of the image's height (top, bottom) and width (left, right).
+struct Region {
+  double top = 0;
+  double bottom = 0;
+  double left = 0;
+  double right = 0;
+
+  [[nodiscard]] double width() const noexcept { return right - left; }
+  [[nodiscard]] double height() const noexcept { return bottom - top; }
+  /// Grown by `fraction` of its own size on every side, clipped to the image. Boxes can be tight
+  /// or cut a little off; padding before cropping is the cheap fix.
+  [[nodiscard]] Region padded(double fraction) const noexcept;
+  /// Pixel edges for an image of `width` x `height`.
+  struct Pixels {
+    int left, top, right, bottom;
+  };
+  [[nodiscard]] Pixels pixels(int image_width, int image_height) const noexcept;
+  /// Edges finite, within [0, 1], and in order.
+  [[nodiscard]] bool valid() const noexcept;
+  friend bool operator==(const Region& a, const Region& b) noexcept {
+    return a.top == b.top && a.bottom == b.bottom && a.left == b.left && a.right == b.right;
+  }
+  friend bool operator!=(const Region& a, const Region& b) noexcept { return !(a == b); }
+};
+
+using Question = std::variant<Boolean, Choice, Score, Box>;
 
 /// A question with the name its answer comes back under.
 struct NamedQuestion {
@@ -152,6 +192,10 @@ template <>
 struct value_of<Score> {
   using type = double;
 };
+template <>
+struct value_of<Box> {
+  using type = Region;
+};
 template <class E>
 struct value_of<EnumChoice<E>> {
   using type = E;
@@ -169,7 +213,8 @@ struct Operator {
 
   /// The question as sent to a provider.
   [[nodiscard]] NamedQuestion named() const {
-    if constexpr (std::is_same_v<Q, Boolean> || std::is_same_v<Q, Choice> || std::is_same_v<Q, Score>) {
+    if constexpr (std::is_same_v<Q, Boolean> || std::is_same_v<Q, Choice> || std::is_same_v<Q, Score> ||
+                  std::is_same_v<Q, Box>) {
       return {name, question};
     } else {
       return {name, question.choice()};

@@ -27,9 +27,14 @@ Json typesafe_question(const Question& question) {
     for (const auto& option : c->options) criteria[option.name] = optional_text(option.description);
     return {{"type", "choice"}, {"instructions", c->instructions}, {"criteria", std::move(criteria)}};
   }
+  if (const auto* box = std::get_if<Box>(&question)) return {{"type", "box"}, {"instructions", box->instructions}};
   const auto& s = std::get<Score>(question);
   return {{"type", "score"}, {"instructions", s.instructions}, {"criteria", s.levels}};
 }
+
+void TypeSafe::attach(const Image& image) { images_.insert_or_assign(image.placeholder(), image); }
+
+void TypeSafe::detach(const Image& image) { images_.erase(image.placeholder()); }
 
 TypeSafe::TypeSafe(ts::Client& client, std::string model, ts::CallOptions options)
     : Provider("TypeSafe"), client_(client), model_(std::move(model)), options_(std::move(options)) {}
@@ -42,6 +47,32 @@ void TypeSafe::start_call(Ticket ticket, const Json& state, const Questions& que
   for (const auto& nq : questions) request.add_raw(nq.name, typesafe_question(nq.question));
   ts::CallOptions options = options_;
   options.model = model_;
+
+  // Images: the attached ones this call references go in `assets` once each, in order of first
+  // use (as the Python provider collects them), and libtypesafe sends them as multipart file
+  // parts with the images header (it adds the header for Box questions too).
+  std::vector<std::string> used = image_placeholders(state);
+  for (auto& placeholder : image_placeholders(questions)) used.push_back(std::move(placeholder));
+  std::vector<std::string> unique;
+  std::size_t expanded_bytes = 0;
+  for (const auto& placeholder : used) {
+    const auto it = images_.find(placeholder);
+    if (it == images_.end()) {
+      finish(ticket, detail::invalid(ErrorKind::invalid_argument,
+                                     placeholder + " is not an attached image; call TypeSafe::attach(image) first"));
+      return;
+    }
+    expanded_bytes += it->second.size();
+    if (std::find(unique.begin(), unique.end(), placeholder) == unique.end()) {
+      unique.push_back(placeholder);
+      options.assets.add_image(placeholder, it->second.shared_bytes());
+    }
+  }
+  if (options.assets.total_bytes() > image_limits::max_request_bytes || expanded_bytes > image_limits::max_request_bytes) {
+    finish(ticket, detail::invalid(ErrorKind::invalid_argument,
+                                   "images in one request must total at most 32 MiB, counting each use; send fewer or smaller images"));
+    return;
+  }
 
   auto decode = [this, questions](ts::Result<ts::SystemOneResult> result) -> Result<Answers> {
     if (!result) {
@@ -80,6 +111,11 @@ void TypeSafe::start_call(Ticket ticket, const Json& state, const Questions& que
           }
         }
         built = make_answer(question, AnswerValue(choice->choice), std::move(probabilities), raw_answer(name), call);
+      } else if (const auto* box = std::get_if<Box>(&question)) {
+        const auto* answer_box = std::get_if<ts::BoxAnswer>(answer);
+        if (answer_box == nullptr) return unexpected("'" + name + "' is not a box answer");
+        const auto& b = answer_box->box;
+        built = make_box_answer(*box, Region{b.top, b.bottom, b.left, b.right}, answer_box->confidence, raw_answer(name), call);
       } else {
         const auto& s = std::get<Score>(question);
         const auto* score = std::get_if<ts::ScoreAnswer>(answer);

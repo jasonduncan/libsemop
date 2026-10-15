@@ -25,19 +25,20 @@ struct Call {
   std::optional<std::int64_t> output_tokens;
 };
 
-/// An answer's value: a bool (Boolean), an option name (Choice), an expected level (Score), or
-/// std::monostate when undecided.
-using AnswerValue = std::variant<std::monostate, bool, std::string, double>;
+/// An answer's value: a bool (Boolean), an option name (Choice), an expected level (Score), a
+/// Region (Box), or std::monostate when undecided.
+using AnswerValue = std::variant<std::monostate, bool, std::string, double, Region>;
 
 /// The answer to one question.
 struct Answer {
   /// Undecided (monostate) when the model was split evenly or below the question's
   /// `min_confidence`. Probabilities are kept either way.
   AnswerValue value;
-  /// "true"/"false", option names, or level texts, in the question's order.
+  /// "true"/"false", option names, or level texts, in the question's order. Empty for Box.
   std::vector<std::pair<std::string, double>> probabilities;
   /// The probability of its own answer: the chosen side, the chosen option, or the level
-  /// nearest a Score's value. The model's view, not a guarantee.
+  /// nearest a Score's value; for Box, the provider's confidence in the box (0 if unreported).
+  /// The model's view, not a guarantee.
   double confidence = 0;
   /// Which provider and model answered, and the tokens used.
   std::shared_ptr<const Call> call;
@@ -48,6 +49,7 @@ struct Answer {
   [[nodiscard]] std::optional<bool> boolean() const;
   [[nodiscard]] std::optional<std::string> choice() const;
   [[nodiscard]] std::optional<double> score() const;
+  [[nodiscard]] std::optional<Region> region() const;
   /// The probability of `key` ("true", an option, a level), or nullopt.
   [[nodiscard]] std::optional<double> probability(std::string_view key) const;
 };
@@ -87,6 +89,8 @@ class Answers {
       return answer->choice();
     } else if constexpr (std::is_same_v<Q, Score>) {
       return answer->score();
+    } else if constexpr (std::is_same_v<Q, Box>) {
+      return answer->region();
     } else {
       const auto label = answer->choice();
       if (!label) return std::nullopt;
@@ -126,6 +130,12 @@ inline constexpr double rounding = 0.005;
 [[nodiscard]] Result<Answer> make_answer(const Question& question, const AnswerValue& value,
                                          std::vector<std::pair<std::string, double>> probabilities,
                                          Json raw = nullptr, std::shared_ptr<const Call> call = nullptr);
+
+/// Build a Box answer: `region` must be valid and `confidence` (nullopt when the provider
+/// reports none, taken as 0) from 0 to 1. Below the question's `min_confidence` it's undecided.
+[[nodiscard]] Result<Answer> make_box_answer(const Box& question, const Region& region,
+                                             std::optional<double> confidence, Json raw = nullptr,
+                                             std::shared_ptr<const Call> call = nullptr);
 
 /// `1 - p` without float noise, for providers that report only p(true): `1 - 0.07` is
 /// 0.9299999999999999, which would fail a 0.93 threshold. Rounds to 10 places.
