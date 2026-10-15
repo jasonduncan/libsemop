@@ -177,3 +177,76 @@ TEST_CASE("cancel and destruction cancel the HTTP call") {
   f.client.pump();
   CHECK(f.transport->sent[1].cancelled);
 }
+
+// ---------------------------------------------------------------------------
+// Images and Box
+// ---------------------------------------------------------------------------
+
+#include "imagekit.hpp"
+
+TEST_CASE("images go in assets with the images header; Box answers are decoded") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  auto photo = Image::from_bytes(imagekit::png()).value();
+  auto logo = Image::from_bytes(imagekit::png(300, 300)).value();
+  provider.attach(photo);
+  provider.attach(logo);
+  auto unused = Image::from_bytes(imagekit::png()).value();
+  provider.attach(unused);
+
+  f.transport->script.push_back(ok(Json::parse(R"({
+    "model": "jev-1.14.0",
+    "answers": {
+      "mug": {"type": "box", "box": {"top": 0.25, "bottom": 0.82, "left": 0.44, "right": 0.84}, "confidence": 0.92},
+      "brand": {"type": "choice", "choice": "a", "confidence": 0.8, "probabilities": {"a": 0.8, "b": 0.2}}
+    },
+    "usage": {"input_tokens": 500, "output_tokens": 30}
+  })")));
+  auto answers = ask(provider, Json{{"photo", photo.placeholder()}},
+                     Questions{{"mug", Box{"the coffee mug in `photo`"}},
+                               {"brand", Choice{"Which brand?", {{"a", "this logo: " + logo.placeholder()}, {"b", "other"}}}}});
+  REQUIRE(answers);
+  CHECK(answers->at("mug").region() == Region{0.25, 0.82, 0.44, 0.84});
+  CHECK(answers->at("mug").confidence == 0.92);
+  CHECK(answers->value(Operator{"mug", Box{"x"}}) == Region{0.25, 0.82, 0.44, 0.84});
+
+  const auto& request = f.transport->sent.at(0).request;
+  CHECK(request.headers.get("TypeSafe-Danger-Zone-Images") == "true");
+  const Json body = Json::parse(request.body);
+  CHECK(body["questions"]["mug"] == Json{{"type", "box"}, {"instructions", "the coffee mug in `photo`"}});
+  CHECK(body["assets"].size() == 2);  // only what's referenced
+  CHECK(body["assets"][photo.placeholder()] ==
+        Json{{"type", "image"}, {"format", "png"}, {"data_base64", photo.base64()}});
+  CHECK(body["assets"][logo.placeholder()]["data_base64"] == logo.base64());
+}
+
+TEST_CASE("text-only calls are unchanged") {
+  Fixture f;
+  TypeSafe provider(f.client);
+  f.transport->script.push_back(ok(good_body));
+  REQUIRE(apply(provider, "hello", {complaint, department, urgency}));
+  const auto& request = f.transport->sent.at(0).request;
+  CHECK_FALSE(request.headers.contains("TypeSafe-Danger-Zone-Images"));
+  CHECK_FALSE(Json::parse(request.body).contains("assets"));
+}
+
+TEST_CASE("an unattached placeholder fails before sending") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  auto photo = Image::from_bytes(imagekit::png()).value();
+  auto answers = ask(provider, Json{{"photo", photo.placeholder()}}, Questions{{"q", Boolean{"Is it red?"}}});
+  REQUIRE_FALSE(answers);
+  CHECK(answers.error().kind == ErrorKind::invalid_argument);
+  CHECK_THAT(answers.error().message, ContainsSubstring("attach"));
+  CHECK(f.transport->sent.empty());
+}
+
+TEST_CASE("a malformed box answer is a provider error") {
+  Fixture f;
+  TypeSafe provider(f.client, "jev-1.14.0");
+  f.transport->script.push_back(ok(Json::parse(R"({"model": "jev-1.14.0",
+    "answers": {"mug": {"type": "box", "box": {"top": 0.9, "bottom": 0.1, "left": 0, "right": 1}, "confidence": 0.9}}})")));
+  auto answers = ask(provider, "x", Questions{{"mug", Box{"the mug"}}});
+  REQUIRE_FALSE(answers);
+  CHECK(answers.error().kind == ErrorKind::provider_error);
+}

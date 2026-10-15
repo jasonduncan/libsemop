@@ -99,6 +99,45 @@ std::optional<double> Answer::score() const {
   return std::nullopt;
 }
 
+std::optional<Region> Answer::region() const {
+  if (const auto* r = std::get_if<Region>(&value)) return *r;
+  return std::nullopt;
+}
+
+bool Region::valid() const noexcept {
+  for (double e : {top, bottom, left, right}) {
+    if (!std::isfinite(e) || e < 0 || e > 1) return false;
+  }
+  return top <= bottom && left <= right;
+}
+
+Region Region::padded(double fraction) const noexcept {
+  const double dx = width() * fraction;
+  const double dy = height() * fraction;
+  return {std::max(0.0, top - dy), std::min(1.0, bottom + dy), std::max(0.0, left - dx), std::min(1.0, right + dx)};
+}
+
+Region::Pixels Region::pixels(int image_width, int image_height) const noexcept {
+  const auto at = [](double f, int n) { return int(std::lround(f * n)); };
+  return {at(left, image_width), at(top, image_height), at(right, image_width), at(bottom, image_height)};
+}
+
+Result<Answer> make_box_answer(const Box& question, const Region& region, std::optional<double> confidence,
+                               Json raw, std::shared_ptr<const Call> call) {
+  if (!region.valid()) {
+    return detail::invalid(ErrorKind::provider_error,
+                           "box edges must be numbers from 0 to 1, in order, got " + detail::repr(AnswerValue(region)));
+  }
+  const double c = confidence.value_or(0.0);
+  if (!is_probability(c)) return detail::invalid(ErrorKind::provider_error, "Box confidence " + detail::repr(c) + " is not from 0 to 1");
+  Answer answer;
+  answer.value = c < question.min_confidence ? AnswerValue() : AnswerValue(region);
+  answer.confidence = c;
+  answer.call = std::move(call);
+  answer.raw = std::move(raw);
+  return answer;
+}
+
 std::optional<double> Answer::probability(std::string_view key) const {
   for (const auto& [k, p] : probabilities) {
     if (k == key) return p;
@@ -112,6 +151,13 @@ Result<Answer> make_answer(const Question& question, const AnswerValue& value,
                            std::vector<std::pair<std::string, double>> probabilities, Json raw,
                            std::shared_ptr<const Call> call) {
   const auto fail = [](std::string message) { return detail::invalid(ErrorKind::provider_error, std::move(message)); };
+
+  if (const auto* box = std::get_if<Box>(&question)) {
+    const auto* region = std::get_if<Region>(&value);
+    if (region == nullptr) return fail("Box value " + detail::repr(value) + " is not a Region");
+    if (!probabilities.empty()) return fail("Box answers have no probabilities");
+    return make_box_answer(*box, *region, std::nullopt, std::move(raw), std::move(call));
+  }
 
   std::vector<std::string> outcomes;
   if (std::holds_alternative<Boolean>(question)) {

@@ -195,12 +195,16 @@ Json encode(const Answers& answers, const Questions& questions, const std::optio
       if (nq.name != name) continue;
       type = std::holds_alternative<Boolean>(nq.question) ? "boolean"
              : std::holds_alternative<Choice>(nq.question) ? "choice"
+             : std::holds_alternative<Box>(nq.question)    ? "box"
                                                            : "score";
     }
     Json value = nullptr;
     if (const auto* b = std::get_if<bool>(&answer.value)) value = *b;
     if (const auto* s = std::get_if<std::string>(&answer.value)) value = *s;
     if (const auto* d = std::get_if<double>(&answer.value)) value = number(*d);
+    if (const auto* r = std::get_if<Region>(&answer.value)) {
+      value = {{"top", number(r->top)}, {"bottom", number(r->bottom)}, {"left", number(r->left)}, {"right", number(r->right)}};
+    }
     Json probabilities = Json::object();
     for (const auto& [key, p] : answer.probabilities) probabilities[key] = number(p);
     body[name] = {{"type", type},

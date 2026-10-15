@@ -66,6 +66,7 @@ add_library(libsemop STATIC
   src/bench.cpp
   src/filtering.cpp
   src/flows.cpp
+  src/images.cpp
   src/provider.cpp
   src/rerank.cpp
   src/util.cpp
@@ -95,7 +96,7 @@ endif()
 
 # --- Examples ---------------------------------------------------------------
 
-set(LIBSEMOP_EXAMPLES hello triage rerank filter ask)
+set(LIBSEMOP_EXAMPLES hello triage rerank filter ask image)
 if(LIBSEMOP_BUILD_EXAMPLES AND LIBSEMOP_WITH_TYPESAFE)
   foreach(example ${LIBSEMOP_EXAMPLES})
     add_executable(example_${example} examples/${example}.cpp)

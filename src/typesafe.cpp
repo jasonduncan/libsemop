@@ -27,9 +27,14 @@ Json typesafe_question(const Question& question) {
     for (const auto& option : c->options) criteria[option.name] = optional_text(option.description);
     return {{"type", "choice"}, {"instructions", c->instructions}, {"criteria", std::move(criteria)}};
   }
+  if (const auto* box = std::get_if<Box>(&question)) return {{"type", "box"}, {"instructions", box->instructions}};
   const auto& s = std::get<Score>(question);
   return {{"type", "score"}, {"instructions", s.instructions}, {"criteria", s.levels}};
 }
+
+void TypeSafe::attach(const Image& image) { images_.insert_or_assign(image.placeholder(), image); }
+
+void TypeSafe::detach(const Image& image) { images_.erase(image.placeholder()); }
 
 TypeSafe::TypeSafe(ts::Client& client, std::string model, ts::CallOptions options)
     : Provider("TypeSafe"), client_(client), model_(std::move(model)), options_(std::move(options)) {}
@@ -42,6 +47,38 @@ void TypeSafe::start_call(Ticket ticket, const Json& state, const Questions& que
   for (const auto& nq : questions) request.add_raw(nq.name, typesafe_question(nq.question));
   ts::CallOptions options = options_;
   options.model = model_;
+
+  // Images: the attached ones this call references go in `assets`, each once.
+  std::vector<std::string> used = image_placeholders(state);
+  for (auto& placeholder : image_placeholders(questions)) used.push_back(std::move(placeholder));
+  Json assets = Json::object();
+  std::size_t unique_bytes = 0;
+  std::size_t expanded_bytes = 0;
+  for (const auto& placeholder : used) {
+    const auto it = images_.find(placeholder);
+    if (it == images_.end()) {
+      finish(ticket, detail::invalid(ErrorKind::invalid_argument,
+                                     placeholder + " is not an attached image; call TypeSafe::attach(image) first"));
+      return;
+    }
+    expanded_bytes += it->second.size();
+    if (!assets.contains(placeholder)) {
+      unique_bytes += it->second.size();
+      assets[placeholder] = {{"type", "image"}, {"format", it->second.format_name()}, {"data_base64", it->second.base64()}};
+    }
+  }
+  if (unique_bytes > image_limits::max_request_bytes || expanded_bytes > image_limits::max_request_bytes) {
+    finish(ticket, detail::invalid(ErrorKind::invalid_argument,
+                                   "images in one request must total at most 32 MiB, counting each use; send fewer or smaller images"));
+    return;
+  }
+  const bool has_box = std::any_of(questions.begin(), questions.end(),
+                                   [](const NamedQuestion& nq) { return std::holds_alternative<Box>(nq.question); });
+  if (!assets.empty() || has_box) {
+    options.headers.set(typesafe_images_header, "true");
+    if (!options.extra_body.is_object()) options.extra_body = Json::object();
+    options.extra_body["assets"] = std::move(assets);
+  }
 
   auto decode = [this, questions](ts::Result<ts::SystemOneResult> result) -> Result<Answers> {
     if (!result) {
@@ -80,6 +117,24 @@ void TypeSafe::start_call(Ticket ticket, const Json& state, const Questions& que
           }
         }
         built = make_answer(question, AnswerValue(choice->choice), std::move(probabilities), raw_answer(name), call);
+      } else if (const auto* box = std::get_if<Box>(&question)) {
+        // libtypesafe 0.1 doesn't model box answers (they arrive as UnknownAnswer); read the raw JSON.
+        const Json raw = raw_answer(name);
+        const auto edge = [&](const char* key, double& out) {
+          if (!raw.is_object() || !raw.contains("box") || !raw["box"].is_object()) return false;
+          const Json& b = raw["box"];
+          if (!b.contains(key) || !b[key].is_number()) return false;
+          out = b[key].get<double>();
+          return true;
+        };
+        Region region;
+        if (!raw.is_object() || raw.value("type", "") != "box" || !edge("top", region.top) ||
+            !edge("bottom", region.bottom) || !edge("left", region.left) || !edge("right", region.right)) {
+          return unexpected("'" + name + "' is not a box answer");
+        }
+        std::optional<double> confidence;
+        if (raw.contains("confidence") && raw["confidence"].is_number()) confidence = raw["confidence"].get<double>();
+        built = make_box_answer(*box, region, confidence, raw, call);
       } else {
         const auto& s = std::get<Score>(question);
         const auto* score = std::get_if<ts::ScoreAnswer>(answer);

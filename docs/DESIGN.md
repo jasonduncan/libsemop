@@ -34,6 +34,21 @@ verified, and how, is in §6.
 | 19 | Examples use forced choices only with an escape option (`other`) | A live run routed "Hi, just saying hello." to `technical` when the only options were billing/technical: the model must pick one | — |
 | 20 | `ask_each` (one question, many states, concurrent) is public | Filtering and reranking use it, and a CLI's per-item commands need it; Python keeps it private | Keep it internal |
 
+### Images and Box (added 2026-10-14, to review)
+
+- Images are attached to the `TypeSafe` provider (`attach`) and referenced by placeholder
+  (`image-<uuid>`) in the state or question text, rather than carried in `Provider::start`'s
+  signature. The core `Provider` API is unchanged; the Python library finds `Image` objects in
+  the state (and live placeholders in text) instead.
+- Image requests are **not** byte-identical to the Python provider's: Python sends multipart
+  file parts through typesafe-sdk 0.7.5; libsemop sends base64 `data_base64` assets because
+  libtypesafe 0.1 only sends JSON. Same server meaning, ~33% larger bodies. Multipart needs a
+  libtypesafe change.
+- libtypesafe 0.1 parses `box` answers as `UnknownAnswer`; `src/typesafe.cpp` reads the raw
+  JSON. A `BoxAnswer` in libtypesafe would remove that.
+- Box answers have no probabilities: `make_box_answer` takes the region and an optional
+  confidence (none reported → 0). `bench::decide` returns no decision for Box.
+
 ## 2. What maps to what
 
 | Python (`semantic_operators`) | C++ (`semop`) |

@@ -57,6 +57,46 @@ blocking helpers (`ask`, `apply`, `filter_items`, `rerank`, flows) are built on 
 `examples/`: `hello.cpp` (quick start), `triage.cpp` (a flow), `rerank.cpp`, `filter.cpp` (a
 tiny semfilter), `ask.cpp` (a minimal `semop ask` over the JSON format).
 
+## Images
+
+TypeSafe takes PNG/JPEG images anywhere text goes: the state, instructions, and option or level
+descriptions. It's **"Dreamer-ready"** on TypeSafe's side (not production-ready; limits and
+accuracy may change).
+
+```cpp
+auto photo = semop::Image::from_file("kitchen.jpg");   // checked here; invalid_argument if not
+semop::TypeSafe provider(*client, "jev-1.14.0");        // Box needs 1.14
+provider.attach(*photo);                                // sent only when referenced
+const semop::Json state = {{"photo", photo->placeholder()}};
+
+auto answers = semop::ask(provider, state, {
+    {"room", semop::Choice{"Which room is `photo`?", {{"kitchen"}, {"office"}, {"other"}}}},
+    {"mug", semop::Box{"the coffee mug in `photo`"}},
+});
+answers->at("mug").region();      // Region{top, bottom, left, right}, fractions of the image
+answers->at("mug").confidence;    // the model's confidence in the box
+```
+
+- **Placing images.** Use `image.placeholder()` (`image-<uuid>`) as a state value or inside any
+  question text; `attach` the image to the provider. Each call sends the attached images it
+  references in `assets`, once each, and every request with an image or a Box question carries
+  `TypeSafe-Danger-Zone-Images: true`. An unattached placeholder fails before sending.
+- **Checked before sending.** PNG or JPEG (no animated PNG), at most 16 MiB, each side
+  256-1568 px, area 78,400-2,458,624 px; images are rejected, not resized. Over 32 MiB of
+  images in one request (counting each use) fails before sending. TypeSafe ignores EXIF
+  orientation: `exif_orientation()` tells you to rotate the pixels yourself; `progressive()`
+  flags non-baseline JPEGs.
+- **Box has no "not found"**: it always returns a box. `semop::locate(provider, state, "a
+  coffee mug", {"`photo`"})` asks a presence Boolean with it and only sets `region` when
+  `found` is true. `Region::padded(0.1)` and `pixels(w, h)` help with cropping.
+- **Several frames** go in the state as an array, oldest first:
+  `{"frames", semop::frames({f0, f1, f2}, {4, 2, 0}).value()}`, then ask "Did the door open
+  during `frames`?" or point at `` `frames[2].frame` ``.
+- Images are sent as base64 JSON assets: libtypesafe 0.1 sends JSON bodies only, so the
+  multipart form TypeSafe recommends (about 33% smaller) isn't used yet.
+
+See `examples/image.cpp`.
+
 ## Build and use
 
 ```sh
